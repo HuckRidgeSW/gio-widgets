@@ -10,6 +10,7 @@ type (
 		Tabs      []*Tab
 		byAddress map[interface{}]*Tab
 		Active    *Tab
+		events    []TabEvent
 	}
 
 	Tab struct {
@@ -20,6 +21,13 @@ type (
 		BecameActive bool
 		button       widget.Button
 	}
+
+	TabEvent struct {
+		Type TabEventType
+		Tab  Layouter
+	}
+
+	TabEventType int
 
 	Labeler interface {
 		Label() string
@@ -36,10 +44,13 @@ type (
 	Deactivater interface {
 		Deactivate()
 	}
+)
 
-	Closer interface {
-		Close()
-	}
+const (
+	TabEventClose TabEventType = iota
+	TabEventActivate
+	// MoveLeft
+	// MoveRight
 )
 
 func NewTabbar(tabs ...*Tab) *Tabbar {
@@ -53,15 +64,26 @@ func NewTabbar(tabs ...*Tab) *Tabbar {
 	return &tb
 }
 
-func (tb *Tabbar) ProcessEvents(gtx *layout.Context) {
-	for i, tab := range tb.Tabs {
+func (tb *Tabbar) Events(gtx *layout.Context) []TabEvent {
+	var e []TabEvent
+	for _, tab := range tb.Tabs {
+		// Don't have to check tab.Closeable, because if it's false, there won't
+		// be a CloseButton to get an event.
 		if tab.CloseButton.Clicked(gtx) {
-			tb.Close(i)
+			e = append(e, TabEvent{
+				Type: TabEventClose,
+				Tab:  tab.W,
+			})
 		}
 		if tab.button.Clicked(gtx) {
-			tb.Activate(tab.W)
+			e = append(e, TabEvent{
+				Type: TabEventActivate,
+				Tab:  tab.W,
+			})
 		}
 	}
+
+	return e
 }
 
 func (tb *Tabbar) Prev() {
@@ -90,31 +112,21 @@ func (tb *Tabbar) Next() {
 	}
 }
 
-// Close closes the indicated tab.  If that tab is active, activates the one
-// to its right, or if there isn't one, the (new) last tab.
+// Close closes the indicated tab.  You cannot close the active tab.
 func (tb *Tabbar) Close(index int) {
 	if index >= len(tb.Tabs) || !tb.Tabs[index].Closeable {
 		return
 	}
+
 	tab := tb.Tabs[index]
+
+	if tab == tb.Active {
+		return
+	}
+
 	copy(tb.Tabs[index:], tb.Tabs[index+1:])
 	tb.Tabs = tb.Tabs[:len(tb.Tabs)-1]
 	delete(tb.byAddress, tab.W)
-
-	// If this is the active tab, activate the tab to the right, or if there
-	// isn't one, the new last tab.
-	if tab == tb.Active {
-		if index >= len(tb.Tabs) {
-			index = len(tb.Tabs) - 1
-		}
-		tb.Activate(tb.Tabs[index].W)
-	}
-
-	// Send close message to the closed tab.  (Deactivate is sent by the above
-	// tb.Activate() call.)
-	if closer, ok := tab.W.(Closer); ok {
-		closer.Close()
-	}
 }
 
 func (tb *Tabbar) Activate(key interface{}) {
@@ -153,6 +165,15 @@ func (tb *Tabbar) Insert(index int, t *Tab) {
 	copy(tb.Tabs[index+1:], tb.Tabs[index:])
 	tb.Tabs[index] = t
 	tb.byAddress[t.W] = t
+}
+
+func (tb *Tabbar) IndexOf(key interface{}) int {
+	for i, tab := range tb.Tabs {
+		if tab.W == key {
+			return i
+		}
+	}
+	return -1
 }
 
 func NewTab(label string, w Layouter, closeable bool) *Tab {

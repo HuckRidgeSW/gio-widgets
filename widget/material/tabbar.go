@@ -87,8 +87,6 @@ func argb(c uint32) color.RGBA {
 }
 
 func (tb *Tabbar) Layout(gtx *layout.Context, wtb *hrw.Tabbar) {
-	wtb.ProcessEvents(gtx)
-
 	for i, tab := range wtb.Tabs {
 		if tab.BecameActive {
 			tab.BecameActive = false
