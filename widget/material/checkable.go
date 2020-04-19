@@ -1,0 +1,68 @@
+package material
+
+import (
+	"image"
+	"image/color"
+
+	"gioui.org/io/pointer"
+	"gioui.org/layout"
+	"gioui.org/op/paint"
+	"gioui.org/text"
+	"gioui.org/unit"
+	"gioui.org/widget"
+	"gioui.org/widget/material"
+)
+
+type checkable struct {
+	Label              string
+	Color              color.RGBA
+	Font               text.Font
+	TextSize           unit.Value
+	IconColor          color.RGBA
+	Size               unit.Value
+	shaper             text.Shaper
+	checkedStateIcon   *material.Icon
+	uncheckedStateIcon *material.Icon
+}
+
+func (c *checkable) layout(gtx *layout.Context, checked bool) {
+
+	var icon *material.Icon
+	if checked {
+		icon = c.checkedStateIcon
+	} else {
+		icon = c.uncheckedStateIcon
+	}
+
+	hmin := gtx.Constraints.Width.Min
+	vmin := gtx.Constraints.Height.Min
+	layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func() {
+			layout.Center.Layout(gtx, func() {
+				layout.UniformInset(unit.Dp(2)).Layout(gtx, func() {
+					size := gtx.Px(c.Size)
+					icon.Color = c.IconColor
+					icon.Layout(gtx, unit.Px(float32(size)))
+					gtx.Dimensions = layout.Dimensions{
+						Size: image.Point{X: size, Y: size},
+					}
+				})
+			})
+		}),
+
+		layout.Rigid(func() {
+			if c.Label == "" {
+				return
+			}
+			gtx.Constraints.Width.Min = hmin
+			gtx.Constraints.Height.Min = vmin
+			layout.W.Layout(gtx, func() {
+				layout.UniformInset(unit.Dp(2)).Layout(gtx, func() {
+					paint.ColorOp{Color: c.Color}.Add(gtx.Ops)
+					widget.Label{}.Layout(gtx, c.shaper, c.Font, c.TextSize, c.Label)
+				})
+			})
+		}),
+	)
+	pointer.Rect(image.Rectangle{Max: gtx.Dimensions.Size}).Add(gtx.Ops)
+}
