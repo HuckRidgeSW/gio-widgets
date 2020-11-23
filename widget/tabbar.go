@@ -6,6 +6,9 @@ import (
 )
 
 type (
+	C = layout.Context
+	D = layout.Dimensions
+
 	Tabbar struct {
 		Tabs      []*Tab
 		byAddress map[interface{}]*Tab
@@ -17,9 +20,9 @@ type (
 		Label        string
 		W            Layouter
 		Closeable    bool
-		CloseButton  widget.Button
+		CloseButton  widget.Clickable
 		BecameActive bool
-		button       widget.Button
+		button       widget.Clickable
 	}
 
 	TabEvent struct {
@@ -34,7 +37,7 @@ type (
 	}
 
 	Layouter interface {
-		Layout(*layout.Context)
+		Layout(C) D
 	}
 
 	Activater interface {
@@ -64,18 +67,18 @@ func NewTabbar(tabs ...*Tab) *Tabbar {
 	return &tb
 }
 
-func (tb *Tabbar) Events(gtx *layout.Context) []TabEvent {
+func (tb *Tabbar) Events(gtx layout.Context) []TabEvent {
 	var e []TabEvent
 	for _, tab := range tb.Tabs {
 		// Don't have to check tab.Closeable, because if it's false, there won't
 		// be a CloseButton to get an event.
-		if tab.CloseButton.Clicked(gtx) {
+		if tab.CloseButton.Clicked() {
 			e = append(e, TabEvent{
 				Type: TabEventClose,
 				Tab:  tab.W,
 			})
 		}
-		if tab.button.Clicked(gtx) {
+		if tab.button.Clicked() {
 			e = append(e, TabEvent{
 				Type: TabEventActivate,
 				Tab:  tab.W,
@@ -173,19 +176,28 @@ func (tb *Tabbar) IndexOf(key interface{}) int {
 			return i
 		}
 	}
-	return -1
+	return -1 // could definitely happen
+}
+
+func (tb *Tabbar) ActiveIndex() int {
+	for i, tab := range tb.Tabs {
+		if tab == tb.Active {
+			return i
+		}
+	}
+	return -1 // shouldn't happen
 }
 
 func NewTab(label string, w Layouter, closeable bool) *Tab {
 	return &Tab{Label: label, W: w, Closeable: closeable}
 }
 
-func (t *Tab) LayoutButton(gtx *layout.Context) {
-	t.button.Layout(gtx)
+func (t *Tab) LayoutButton(gtx C) D {
+	return t.button.Layout(gtx)
 }
 
-func (t *Tab) Layout(gtx *layout.Context) {
-	t.W.Layout(gtx)
+func (t *Tab) Layout(gtx C) D {
+	return t.W.Layout(gtx)
 }
 
 func (t *Tab) GetLabel() string {
