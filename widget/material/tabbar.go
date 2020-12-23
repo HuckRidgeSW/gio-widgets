@@ -64,9 +64,9 @@ func NewTabbar(th *material.Theme) *Tabbar {
 		th:        th,
 		CloseIcon: mustIcon(widget.NewIcon(icons.NavigationClose)),
 	}
-	tb.Color.Active = th.Color.Text
+	tb.Color.Active = th.Palette.Fg
 	tb.Color.Inactive = nrgb(0xffffff) // FIXME
-	tb.Color.Container = th.Color.Primary
+	tb.Color.Container = th.Palette.Fg
 	tb.Color.Divider = nrgb(0xffffff) // FIXME
 	return &tb
 }
