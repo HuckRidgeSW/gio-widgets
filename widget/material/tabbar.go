@@ -127,7 +127,7 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 								if !tab.Closeable {
 									return D{}
 								}
-								ib := material.IconButton(tb.th, &tab.CloseButton, tb.CloseIcon)
+								ib := material.IconButton(tb.th, &tab.CloseButton, tb.CloseIcon, "")
 								ib.Size = unit.Px(float32(lblDims.Size.Y - 2))
 								ib.Inset = layout.Inset{}
 								return ib.Layout(gtx)
@@ -141,8 +141,10 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 				})
 				buttonCall := buttonMacro.Stop()
 				gtx.Constraints = layout.Exact(dims.Size)
-				tab.LayoutButton(gtx)
-				buttonCall.Add(gtx.Ops)
+				tab.LayoutButton(gtx, func(gtx C) D {
+					buttonCall.Add(gtx.Ops)
+					return dims
+				})
 
 				// Underline the active item
 				if tab == wtb.Active {

@@ -192,8 +192,8 @@ func NewTab(label string, w Layouter, closeable bool) *Tab {
 	return &Tab{Label: label, W: w, Closeable: closeable}
 }
 
-func (t *Tab) LayoutButton(gtx C) D {
-	return t.button.Layout(gtx)
+func (t *Tab) LayoutButton(gtx C, w layout.Widget) D {
+	return t.button.Layout(gtx, w)
 }
 
 func (t *Tab) Layout(gtx C) D {
