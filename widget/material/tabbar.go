@@ -4,11 +4,12 @@ import (
 	"image"
 	"image/color"
 
+	"gioui.org/font"
+	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
-	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -24,7 +25,8 @@ type (
 type (
 	// See https://material.io/components/tabs
 	Tabbar struct {
-		th *material.Theme
+		th       *material.Theme
+		eventKey int
 
 		// Currently ignored: All tabbars are scrollable.
 		//
@@ -41,7 +43,7 @@ type (
 			Container color.NRGBA
 			Divider   color.NRGBA
 		}
-		Font      text.Font
+		Font      font.Font
 		IconType  IconType
 		Buttons   layout.List
 		CloseIcon *widget.Icon
@@ -90,7 +92,20 @@ func nargb(c uint32) color.NRGBA {
 	return color.NRGBA{A: uint8(c >> 24), R: uint8(c >> 16), G: uint8(c >> 8), B: uint8(c)}
 }
 
+var tabbarKeyset = hrw.BuildKeyset(
+	hrw.BuildKeygroup("Short-Shift", "{", "}", "[", "]"),
+	hrw.BuildKeygroup("Short", "1", "2", "3", "4", "5", "6", "7", "8", "9"),
+)
+
 func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
+	tb.processEvents(gtx, wtb)
+
+	defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
+	key.InputOp{
+		Tag:  &tb.eventKey,
+		Keys: key.Set(tabbarKeyset),
+	}.Add(gtx.Ops)
+
 	for i, tab := range wtb.Tabs {
 		if tab.BecameActive {
 			tab.BecameActive = false
@@ -105,8 +120,8 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 				tab := wtb.Tabs[i]
 				// From https://material.io/components/tabs/#specs
 				gtx.Constraints = layout.Constraints{
-					Min: image.Point{X: gtx.Px(unit.Dp(90)), Y: gtx.Px(unit.Dp(48))},
-					Max: image.Point{X: gtx.Px(unit.Dp(360)), Y: gtx.Px(unit.Dp(48))},
+					Min: image.Point{X: gtx.Dp(90), Y: gtx.Dp(48)},
+					Max: image.Point{X: gtx.Dp(360), Y: gtx.Dp(48)},
 				}
 				buttonMacro := op.Record(gtx.Ops)
 				dims := layout.Inset{
@@ -128,7 +143,14 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 									return D{}
 								}
 								ib := material.IconButton(tb.th, &tab.CloseButton, tb.CloseIcon, "")
-								ib.Size = unit.Px(float32(lblDims.Size.Y - 2))
+								// log.Printf("tab %d: size: %v, baseline: %v, dp size - 2: %v, dp size / 2: %v", i,
+								// 	lblDims.Size.Y,
+								// 	lblDims.Baseline,
+								// 	unit.Dp(lblDims.Size.Y-2),
+								// 	unit.Dp(lblDims.Size.Y/2))
+								// Not sure this is right.
+								ib.Size = unit.Dp(lblDims.Size.Y / 2)
+								// ib.Size = unit.Dp(lblDims.Size.Y - lblDims.Baseline)
 								ib.Inset = layout.Inset{}
 								return ib.Layout(gtx)
 							}),
@@ -147,11 +169,11 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 				})
 
 				// Underline the active item
-				if tab == wtb.Active {
+				if tab == wtb.Active() {
 					paint.FillShape(gtx.Ops,
 						color.NRGBA{A: 0xff, B: 0xff},
 						clip.Rect{
-							Min: image.Point{X: 0, Y: dims.Size.Y - gtx.Px(unit.Dp(2))},
+							Min: image.Point{X: 0, Y: dims.Size.Y - gtx.Dp(2)},
 							Max: image.Point{X: dims.Size.X, Y: dims.Size.Y},
 						}.Op(),
 					)
@@ -161,7 +183,50 @@ func (tb *Tabbar) Layout(gtx C, wtb *hrw.Tabbar) D {
 			})
 		}),
 		layout.Rigid(func(gtx C) D {
-			return wtb.Active.Layout(gtx)
+			return wtb.Active().Layout(gtx)
 		}),
 	)
+}
+
+func (tb *Tabbar) processEvents(gtx C, wtb *hrw.Tabbar) {
+	for _, e := range gtx.Events(&tb.eventKey) {
+		switch ke := e.(type) {
+		case key.Event:
+			if ke.State != key.Press {
+				break
+			}
+			switch ke.Name {
+			// On macOS, cmd-shift-[ aka cmd-{ is reported as "{"; on Windows
+			// it's "[".  Both report Shortcut+Shift, though.  (And similarly
+			// below for }/].
+			case "{", "[":
+				// tl.log.Printf("toplevel process key: { %v", ke.Modifiers)
+				if ke.Modifiers == key.ModShortcut|key.ModShift {
+					// e.Consume()
+					wtb.Prev()
+				}
+			case "}", "]":
+				// tl.log.Printf("toplevel process key: } %v", ke.Modifiers)
+				if ke.Modifiers == key.ModShortcut|key.ModShift {
+					// e.Consume()
+					wtb.Next()
+				}
+			case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+				if ke.Modifiers == key.ModShortcut {
+					// e.Consume()
+					tabNum := int(ke.Name[0] - '1')
+					// Ctrl/Cmd-9 always goes to the last tab.
+					if ke.Name == "9" {
+						wtb.Activate(wtb.Tabs[len(wtb.Tabs)-1].W)
+					} else if tabNum < len(wtb.Tabs) {
+						wtb.Activate(wtb.Tabs[tabNum].W)
+					}
+				}
+			default:
+				// tl.log.Printf("Toplevel.processEvents: Unknown key: %+v", ke)
+			}
+		default:
+			// tl.log.Printf("Toplevel.processEvents: Unknown event type: %T %+v", ke, ke)
+		}
+	}
 }
